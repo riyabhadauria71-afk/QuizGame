@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ topic }} - Academy Quiz</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <header>
+        <div class="header-nav">
+            <a class="nav-back" href="{{ url_for('home') }}">← All Topics</a>
+            <span class="status-pill {% if content.source == 'gemini-ai' %}live{% else %}offline{% endif %}">
+                {{ content.message }}
+            </span>
+        </div>
+        <h1>{{ topic }}</h1>
+        <p>Interactive Learning Guide &amp; Knowledge Check</p>
+    </header>
+
+    <main>
+        <!-- Educational Summary Card -->
+        <section class="learning-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>📚 Topic Overview</h2>
+                </div>
+                <div class="card-body">
+                    <p id="topicSummary" class="summary-text">{{ content.summary }}</p>
+                    
+                    <h3>Key Takeaways</h3>
+                    <ul id="keyPointsList" class="key-points-list">
+                        {% for point in content.key_points %}
+                            <li>{{ point }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quiz Section -->
+        <section class="quiz-section">
+            <div class="card">
+                <div class="quiz-header">
+                    <div>
+                        <h2>🎯 Topic Quiz</h2>
+                        <p class="quiz-subtitle">Answer the questions below to test your understanding.</p>
+                    </div>
+                    <button type="button" id="regenerateBtn" class="btn btn-secondary" onclick="regenerateQuiz()">
+                        ⚡ Generate New with AI
+                    </button>
+                </div>
+
+                <div id="loadingIndicator" class="loading-box" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Consulting Gemini AI to generate new questions...</p>
+                </div>
+
+                <div id="quizContainer">
+                    <form id="quizForm" onsubmit="handleQuizSubmit(event)">
+                        <div id="questionsList">
+                            <!-- Questions will be dynamically rendered / populated -->
+                        </div>
+
+                        <div id="quizResultBanner" class="result-banner" style="display: none;">
+                            <h3 id="resultScore"></h3>
+                            <p id="resultFeedback"></p>
+                            <button type="button" class="btn btn-secondary" onclick="resetQuiz()">🔄 Retry Quiz</button>
+                        </div>
+
+                        <div class="quiz-actions" id="quizActions">
+                            <button type="submit" id="submitBtn" class="btn btn-primary">Submit Answers</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <div class="bottom-nav">
+            <a class="btn btn-outline" href="{{ url_for('home') }}">← Back to Topics List</a>
+        </div>
+    </main>
+
+    <footer>
+        <p>Academy Quiz Platform &copy; 2026 &bull; Powered by Google Gemini AI &amp; Flask</p>
+    </footer>
+
+    <!-- Safe JSON serialization of initial quiz data -->
+    <script>
+        const currentTopic = {{ topic|tojson }};
+        let quizQuestions = {{ content.questions|tojson }};
+
+        function renderQuestions() {
+            const list = document.getElementById("questionsList");
+            list.innerHTML = "";
+
+            if (!quizQuestions || quizQuestions.length === 0) {
+                list.innerHTML = "<p class='no-questions'>No quiz questions available for this topic yet.</p>";
+                document.getElementById("quizActions").style.display = "none";
+                return;
+            }
+
+            document.getElementById("quizActions").style.display = "block";
+            document.getElementById("quizResultBanner").style.display = "none";
+
+            quizQuestions.forEach((q, qIndex) => {
+                const qCard = document.createElement("div");
+                qCard.className = "question-card";
+                qCard.id = `qCard_${qIndex}`;
+
+                const qTitle = document.createElement("div");
+                qTitle.className = "question-title";
+                qTitle.innerHTML = `<span class="q-badge">Q${qIndex + 1}</span> <strong>${escapeHtml(q.question)}</strong>`;
+                qCard.appendChild(qTitle);
+
+                const optionsContainer = document.createElement("div");
+                optionsContainer.className = "options-group";
+
+                q.options.forEach((opt, optIndex) => {
+                    const label = document.createElement("label");
+                    label.className = "option-label";
+                    label.id = `optLabel_${qIndex}_${optIndex}`;
+
+                    const radio = document.createElement("input");
+                    radio.type = "radio";
+                    radio.name = `question_${qIndex}`;
+                    radio.value = optIndex;
+                    radio.required = true;
+
+                    radio.addEventListener("change", () => {
+                        // Clear active classes in this question group
+                        document.querySelectorAll(`[id^="optLabel_${qIndex}_"]`).forEach(el => {
+                            el.classList.remove("selected");
+                        });
+                        label.classList.add("selected");
+                    });
+
+                    const span = document.createElement("span");
+                    span.className = "option-text";
+                    span.textContent = opt;
+
+                    label.appendChild(radio);
+                    label.appendChild(span);
+                    optionsContainer.appendChild(label);
+                });
+
+                qCard.appendChild(optionsContainer);
+
+                // Explanation container (hidden initially)
+                const expBox = document.createElement("div");
+                expBox.className = "explanation-box";
+                expBox.id = `explanation_${qIndex}`;
+                expBox.style.display = "none";
+                qCard.appendChild(expBox);
+
+                list.appendChild(qCard);
+            });
+        }
+
+        function handleQuizSubmit(e) {
+            e.preventDefault();
+
+            let score = 0;
+            const total = quizQuestions.length;
+
+            quizQuestions.forEach((q, qIndex) => {
+                const selectedRadio = document.querySelector(`input[name="question_${qIndex}"]:checked`);
+                const userChoice = selectedRadio ? parseInt(selectedRadio.value, 10) : -1;
+                const correctChoice = q.correct_index;
+
+                // Disable radios after submission
+                document.querySelectorAll(`input[name="question_${qIndex}"]`).forEach(r => r.disabled = true);
+
+                // Mark options
+                q.options.forEach((_, optIndex) => {
+                    const label = document.getElementById(`optLabel_${qIndex}_${optIndex}`);
+                    if (optIndex === correctChoice) {
+                        label.classList.add("correct");
+                    } else if (optIndex === userChoice) {
+                        label.classList.add("incorrect");
+                    }
+                });
+
+                // Display explanation
+                const expBox = document.getElementById(`explanation_${qIndex}`);
+                expBox.style.display = "block";
+                const isCorrect = userChoice === correctChoice;
+                if (isCorrect) score++;
+
+                expBox.innerHTML = `
+                    <div class="exp-header ${isCorrect ? 'exp-correct' : 'exp-wrong'}">
+                        ${isCorrect ? '✅ Correct!' : '❌ Incorrect.'}
+                    </div>
+                    <p class="exp-body">${escapeHtml(q.explanation)}</p>
+                `;
+            });
+
+            // Display overall score banner
+            const resultBanner = document.getElementById("quizResultBanner");
+            const resultScore = document.getElementById("resultScore");
+            const resultFeedback = document.getElementById("resultFeedback");
+            
+            const percentage = Math.round((score / total) * 100);
+            resultScore.textContent = `Score: ${score} / ${total} (${percentage}%)`;
+
+            if (percentage === 100) {
+                resultFeedback.textContent = "🏆 Masterful! You got every question right!";
+                resultBanner.className = "result-banner perfect";
+            } else if (percentage >= 60) {
+                resultFeedback.textContent = "👏 Great job! Review the explanations above to strengthen your knowledge.";
+                resultBanner.className = "result-banner pass";
+            } else {
+                resultFeedback.textContent = "💪 Keep going! Read the key takeaways and try again.";
+                resultBanner.className = "result-banner retry";
+            }
+
+            resultBanner.style.display = "block";
+            document.getElementById("quizActions").style.display = "none";
+            resultBanner.scrollIntoView({ behavior: "smooth" });
+        }
+
+        function resetQuiz() {
+            renderQuestions();
+            document.getElementById("quizContainer").scrollIntoView({ behavior: "smooth" });
+        }
+
+        async function regenerateQuiz() {
+            const regenBtn = document.getElementById("regenerateBtn");
+            const loader = document.getElementById("loadingIndicator");
+            const quizContainer = document.getElementById("quizContainer");
+
+            regenBtn.disabled = true;
+            loader.style.display = "flex";
+            quizContainer.style.opacity = "0.4";
+
+            try {
+                const response = await fetch(`/api/generate-quiz/${encodeURIComponent(currentTopic)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                });
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    // Update content
+                    quizQuestions = result.data.questions || [];
+                    document.getElementById("topicSummary").textContent = result.data.summary;
+                    
+                    const pointsList = document.getElementById("keyPointsList");
+                    pointsList.innerHTML = "";
+                    (result.data.key_points || []).forEach(pt => {
+                        const li = document.createElement("li");
+                        li.textContent = pt;
+                        pointsList.appendChild(li);
+                    });
+
+                    renderQuestions();
+                } else {
+                    alert("Unable to generate new questions right now. Please try again.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error connecting to server. Please try again.");
+            } finally {
+                regenBtn.disabled = false;
+                loader.style.display = "none";
+                quizContainer.style.opacity = "1";
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Initialize quiz rendering
+        document.addEventListener("DOMContentLoaded", renderQuestions);
+    </script>
+</body>
+</html>
