@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academy Quiz - AI Learning Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <div class="header-badge">
+        {% if gemini_configured %}
+            <span class="status-pill live">✨ Gemini 2.5 AI Active</span>
+        {% else %}
+            <span class="status-pill offline">📚 Curated Mode (Add GEMINI_API_KEY for Live AI)</span>
+        {% endif %}
+    </div>
+    <h1>Academy Quiz</h1>
+    <p>Master Computer Science with AI-generated study guides and interactive quizzes</p>
+</header>
+
+<main>
+    <section class="features-bar">
+        <div class="feature-item">
+            <span class="feature-icon">📖</span>
+            <strong>Topic Summaries</strong>
+            <p>Concise concepts & key takeaways</p>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">🎯</span>
+            <strong>Interactive Quizzes</strong>
+            <p>Test your knowledge on every topic</p>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">⚡</span>
+            <strong>Instant Explanations</strong>
+            <p>Learn from detailed answer rationales</p>
+        </div>
+    </section>
+
+    <h2>Choose a Topic to Begin</h2>
+
+    <div class="topic-container">
+        {% for topic in topics %}
+            <div class="topic-card">
+                <div class="topic-card-header">
+                    <span class="topic-number">#{{ loop.index }}</span>
+                    <h3>{{ topic }}</h3>
+                </div>
+                <p class="topic-desc">Study guides and interactive quiz questions.</p>
+                <a class="btn" href="{{ url_for('topic', topic_name=topic) }}">Start Learning & Quiz →</a>
+            </div>
+        {% endfor %}
+    </div>
+</main>
+
+<footer>
+    <p>Academy Quiz Platform &copy; 2026 &bull; Built with Flask &amp; Google Gemini API</p>
+</footer>
+
+</body>
+</html>
